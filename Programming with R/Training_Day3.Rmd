@@ -1,0 +1,295 @@
+---
+title: "Data Science with R (Day 3)"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Today's agenda
+
+present today's agenda
+
+# Open Questions
+
+discuss open questions of participants
+
+# Last exercise
+
+discuss last exercise
+
+# Repetition
+
+## Wide and Tidy Data.
+
+```{r}
+library(tidyverse)
+pop_wide <- population %>% 
+  spread(key="year", value="population")
+```
+
+```{r}
+pop_tidy <- pop_wide %>% 
+  gather (key = "year", value = "population", 2:20) 
+```
+
+## Summarising Data
+
+Calculate the world population for each year.
+
+```{r}
+pop_tidy %>% 
+  dplyr::group_by(year) %>% 
+  dplyr::summarize(pop_total = sum(population/1E6, na.rm=T))
+```
+
+
+
+# Learning Objectives
+
+- Time and Date Handling
+
+- Dynamic Time Series Plotting
+
+- Dynamic Geospatial Plotting
+
+- Further Plotting: Heatmaps
+
+- Further Plotting: ggplot2 and Heatmaps
+
+# Time and Date Handling
+
+We use “CalIt2 Building People Counts Data Set” from “UCI Machine Learning Repository”. It includes observations on people flowing in or out of a building, measured over 15 weeks, half hour count aggregates.
+
+For analysis we need dplyr package. ggplot2 is used for visualisation. Please make sure you have installed it before trying to load it.
+
+```{r}
+library(tidyverse)
+```
+
+“url” gets the http address of data. Data is downloaded with read.csv(). Column names are not included in the data, so we add this manually. Information on inflow or outflow is coded with numerics (7 for outflow, 9 for inflow). We create an additional column with corresponding information as string (“out” or “in”). Original “flow” column is deleted afterwards. Finally, we take a look at the data with tbl_df() from dplyr package.
+
+```{r}
+url <- "http://archive.ics.uci.edu/ml/machine-learning-databases/event-detection/CalIt2.data"
+building <- read.csv(url, header = F)
+colnames(building) <- c("flow", "date", "time", "count")
+building$flow_str <- NA
+building$flow_str[building$flow == 7] <- "out"
+building$flow_str[building$flow == 9] <- "in"
+building$flow <- as.factor(building$flow_str)
+tbl_df(building)
+```
+
+Information on date and time are stored in two separate columns, but it makes more sense to have it as a single timestamp, because it describes one unique timestamp. Thus, both columns are concatenated with **paste()**.
+
+```{r}
+building$timestamp_chr <- paste(building$date, building$time)
+str(building$timestamp_chr)
+head(building$timestamp_chr)
+```
+
+The result is of type character, not helpful either, we will change this in the next step. But now we know which component of timestamp is stored at which position and what the separator is. R cannot know by itself which component is a year, and which one a month. This knowledge we need to explain to R in the next step.
+
+We found out that our timestamp has the following components: first month, then day, year, hour, minute, and second. With as.POSIXct() we convert the characters to type “POSIXct”. There is a special syntax you have to use.
+
+```{r}
+library(lubridate)
+building$timestamp <- lubridate::mdy_hms(building$timestamp_chr)
+str(building$timestamp)
+```
+
+Now, we can take a look at the result.
+
+```{r}
+g <- ggplot(building[1:500, ], aes(x = timestamp, y = count, color = flow))
+g <- g + geom_line()
+g
+```
+
+# Dynamic Time Series Plotting
+
+With *dygraph* dynamic timeseries graphs can be created.
+
+More information on dygraphs can be found here: 
+[https://rstudio.github.io/dygraphs/]
+
+## Packages
+
+```{r packages}
+library(tidyverse)
+library(xts)
+library(dygraphs)
+```
+
+## Data Preparation
+
+```{r data_prep}
+crypto_currencies <- readRDS("./data/CurrencyPrices.RDS")
+#str(crypto_currencies)
+bitcoin <- crypto_currencies %>% 
+  filter(currency_name == "bitcoin") %>% 
+  select (timestamp, Close) %>% 
+  filter (timestamp > as.POSIXct("2015-08-07"))
+bitcoin_xts <- xts(bitcoin$Close, order.by = bitcoin$timestamp)
+ethereum <- crypto_currencies %>% 
+  filter(currency_name == "ethereum") %>% 
+  select (timestamp, Close) 
+ethereum_xts <- xts(ethereum$Close, order.by = ethereum$timestamp)
+
+# combine both to be in the same object
+currencies_xts <- cbind(bitcoin_xts, ethereum_xts)
+colnames(currencies_xts) <- c("Bitcoin", "Ethereum")
+```
+
+## Creating the Graph
+
+```{r}
+dygraph(data = currencies_xts, main = "Crypto-Currencies", 
+        xlab = "Time", ylab = "Price Change [%]") %>% 
+  dyRangeSelector(dateWindow = c("2016-01-01", "2016-12-31")) %>% 
+  dyHighlight(highlightCircleSize = 5, 
+              highlightSeriesBackgroundAlpha = 0.2,
+              hideOnMouseOut = FALSE) %>% 
+  dyRoller(rollPeriod = 0) %>% 
+  dyRebase(percent = TRUE)
+```
+
+## Linked Dygraph  
+
+It is also possible to create a linked graph, which means there are two or more graphs and each change on one graph is mirrored to the other graph.
+
+```{r create_dygraph}
+dygraph(data = bitcoin_xts, main = "Bitcoin", 
+        xlab = "Time", ylab = "Price Change [%]",
+        group = "cryptocurrencies") %>% 
+  dyRangeSelector(dateWindow = c("2016-01-01", "2016-12-31")) %>% 
+  dyHighlight(highlightCircleSize = 5, 
+              highlightSeriesBackgroundAlpha = 0.2,
+              hideOnMouseOut = FALSE) %>% 
+  dyRoller(rollPeriod = 0) %>% 
+  dyRebase(percent = TRUE)
+
+dygraph(data = ethereum_xts, main = "Ethereum", 
+        xlab = "Time", ylab = "Price Change [%]",
+        group = "cryptocurrencies") %>% 
+  dyRangeSelector(dateWindow = c("2016-01-01", "2016-12-31")) %>% 
+  dyHighlight(highlightCircleSize = 5, 
+              highlightSeriesBackgroundAlpha = 0.2,
+              hideOnMouseOut = FALSE) %>% 
+  dyRoller(rollPeriod = 0) %>% 
+  dyRebase(percent = TRUE)
+```
+
+
+# Dynamic Geospatial Plotting
+
+## Packages 
+
+We will use package **leaflet**. More information on **leaflet** can be found here: https://rstudio.github.io/leaflet/
+
+```{r package}
+library(leaflet)
+library(tidyverse)
+```
+
+## Data Preparation
+
+```{r data_prep2}
+df <- readr::read_csv("./data/Mobile_activity_3months_scrambled.csv")
+```
+
+## Create Geospatial Visualisation
+
+Dataframe with long / lat data is piped to *leaflet()* function. All other functionalities are added via piping.
+
+```{r}
+df_filt <- df %>% 
+  filter(timestep == 1)
+
+df_filt %>% 
+  leaflet() %>% 
+  # these maps are included to show different types
+  leaflet::addProviderTiles("CartoDB.Positron", group = "Simple") %>% 
+    leaflet::addProviderTiles("OpenStreetMap.Mapnik", group = "Detailed") %>%   
+    leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographical") %>%
+    leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
+  # addLayersControl adds labels for the different map types
+    leaflet::addLayersControl(position = 'bottomright',
+                              baseGroups = c("Simple", "Detailed", 
+                                             "Topographical", "Satellite"),
+                              options = layersControlOptions(collapsed = FALSE)) %>%
+  # each location is marked with a marker
+  addMarkers(lng = df_filt$lon,
+             lat = df_filt$lat,
+             label = as.character(df_filt$count)) %>%
+  # or with a circle
+  addCircles(lng = df_filt$lon,
+             lat = df_filt$lat,
+             popup = as.character(df_filt$count),
+             radius = df_filt$count*30) %>% 
+  addLabelOnlyMarkers(lng = df_filt$lon,
+                      lat = df_filt$lat,
+                      #label = as.character(df_filt$count),
+                      labelOptions = labelOptions(noHide = T, direction = 'top', textOnly = T,
+                                                    textsize = "14px")) %>%
+  # addMiniMap helps to get an overview of location, although it is very much zoomed in
+  addMiniMap(toggleDisplay = T, 
+             zoomLevelFixed = 2,
+             zoomAnimation = TRUE, 
+             width = 200, 
+             height = 200,
+             collapsedWidth = 50, 
+             collapsedHeight = 50)
+
+```
+
+# ggplot2 and Heatmaps
+
+## Packages
+
+```{r}
+library(pacman)
+p_load(tidyverse)
+```
+
+## Data Prep
+
+```{r}
+url <- "http://koaning.io/theme/data/chickweight.csv"
+filename <- "ChickenWeight.csv"
+download.file(url = url, destfile = filename)
+```
+
+```{r}
+chicken <- read_csv(filename)
+chicken$rownum <- NULL
+```
+
+## Results
+
+```{r}
+chicken_spread <- chicken_weight_time_diet %>% 
+  spread(key = "Time", value = "weight")
+
+p_load(pheatmap)
+
+pheatmap(mat = chicken_spread, cluster_rows = F, cluster_cols = F, display_numbers = T,
+         main = "Chicken Weight per Time and Diet", xlab = "Time", ylab = "Diet")
+```
+
+# Dynamic ggplot2 with Plotly
+
+Creating a dynamic plot based on a ggplot is rather simple. All you have to do is wrapping the call of ggplot-object, here *g*, in a **ggplotly()** call.
+
+```{r}
+library(plotly)
+ggplotly(g)
+```
+

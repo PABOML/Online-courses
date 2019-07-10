@@ -1,0 +1,211 @@
+---
+title: "Data Science with R: Day2"
+author: Paul Bockelmann
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r package}
+library(pacman)
+p_load(tidyverse, readxl)
+
+```
+
+#Repetition
+```{r}
+data('ChickWeight')
+ChickWeight
+```
+
+# How does Chicken no 4 weight on day 21? On which diet is it?
+```{r}
+chick_4_day_21<- ChickWeight %>% 
+filter(Chick == 4 & Time == 21)
+chick_4_day_21
+```
+
+The chicken nr. 4 weights on day 21 `r chick_4_day_21$weigth` pounds and is on diet `r chick_4_day_21$Diet`.
+
+Visualise the development of weights for different diets.
+Create a boxplot for each day / each diet.
+
+```{r}
+g <- ggplot(data = ChickWeight,
+            aes(x = factor(Time), #factor defines the different classes of time, otherwise these classes are averaged
+                y = weight,
+                col = Diet))
+g <- g + geom_boxplot()
+g <- g + labs(x = 'Time [d]', y = 'Weight [g]', title = ' Chicken weight over time and diet' )
+g
+
+```
+
+# Data Transformation
+
+## Wide Data
+
+```{r}
+school_wide <- data.frame (name = c('Stuart', 'Bob', 'Kevin'),
+                           math = c(2, 3, 4),
+                           sport = c(3, 1, 2),
+                           art = c(3, 2, 1))
+school_wide
+
+# data.frame creates a data frame from scratch
+```
+
+```{r}
+school_wide %>% 
+  gather(key = 'subject', value = 'grade', 2:4) #2:4 specifies the coloms in the table above (school_wide) to be transformed by gather from a wide into a long table
+
+#school_wide
+```
+
+```{r}
+school_tidy <- school_wide %>% 
+  gather(key = 'subject', value = 'grade', 2:4)
+school_tidy
+  
+```
+```{r}
+school_tidy
+```
+
+
+
+```{r}
+filter_math <- school_tidy %>% #Paul played around: Mean from different data form
+filter(subject == 'math')
+mean(filter_math$grade)
+```
+
+
+
+
+```{r}
+school_tidy %>% 
+  spread(key = 'subject', value = 'grade') #reverse the transformation from long into wide table by spread 
+```
+
+```{r}
+mean(school_wide$math) 
+mean(school_wide$sport)
+mean(school_wide$art)
+```
+
+```{r}
+school_tidy %>%
+  group_by(subject) %>% 
+  summarise(mean_grade = mean(grade),
+            best_grade = min(grade),
+            worst_grade = max(grade))
+```
+```{r}
+school_tidy %>% #Paul played around with "group_by"
+  group_by(name) %>% 
+  summarise(mean_grade = mean(grade),
+            best_grade = min(grade),
+            worst_grade = max(grade))
+```
+
+```{r}
+g <- ggplot(school_tidy, aes(x = subject,
+                             y = grade, 
+                             fill = name))
+g <- g + geom_col(position = 'dodge')
+g <- g + labs (title = 'School grades', x = 'Subject', y = 'Grade [-]')
+g <- g + theme_bw()
+g
+```
+
+
+# Importing Data
+
+## Excel
+
+```{r}
+affairs_xlsx <- read_xlsx(path = './data/Affairs.xlsx')
+```
+
+## CSV 
+
+```{r}
+affairs_csv <- read.csv(file = './data/Affairs.csv')
+write_csv(x = affairs_csv, path = './data/Affairs2.csv')
+```
+
+
+# RDA (old R Data) / RDS (R Data)
+
+```{r}
+load('./data/Affairs.RDA')
+```
+
+
+```{r}
+affair_rds <- readRDS('./data/Affairs.RDS')
+```
+
+
+##Wind Farm Data Base (WFDB)
+
+```{r}
+#p_load('RODBC')
+#install.packages('./package/swpEDW_0.1.1.tar.gz', 
+#                 type = 'source',
+#                 repos = NULL)
+                  #Internal SGRE package -> no access on internet via repos = NULL and type = 'source'
+library(swpEDW)
+```
+
+
+```{r}
+wf_data <- edw.read(turbineId = c(2304696, 2304697),
+                    tdi = 'acwindsp', 'actpower', 'ambietmp',
+                    t_from = '2016-01-01',
+                    t_to = '2016-01-05')
+```
+
+# Functions
+
+```{r}
+rectangleArea <- function(width, height = 10) {
+  area <- width * height
+  return(area)
+}
+```
+
+```{r}
+rectangleArea(width = 5) 
+              #,height = 8 )
+```
+
+
+```{r}
+average <- function(numbers) {
+  sum <- sum(numbers)
+  number <- length(numbers)
+  average <- sum/number
+  return(average)
+}
+```
+
+
+```{r}
+average(c(1, 2, 3))
+```
+
+
+
+
+
+
+
+
+
+
+
+

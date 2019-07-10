@@ -1,0 +1,198 @@
+---
+title: "Day4_Training"
+author: "Paul Bockelmann"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+    fig_width: 8
+    fig_height: 6
+    fig_caption: true
+    css: styles.css
+    theme: flatly
+date: "March 14, 2018"
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+#Packages
+
+```{r}
+library(tidyverse)
+```
+
+
+# Data preparation
+
+# Math Equations
+
+$$ws_{norm} = was_{measured} \cdot \frac{\rho_{measured}}{\rho_{standard}} $$
+$$c = \sqrt{a^2+b^2}$$
+
+# Tabbed Sections {.tabset}
+
+## Tab 1
+
+some content here
+
+## Tab 2
+
+some other content
+
+## Tab 3
+
+much more content
+
+# Web Scraping
+
+```{r}
+#install.packages(rvest)
+library(rvest)
+```
+
+
+```{r}
+# url <- 'https://en.wikipedia.org/wiki/Wind_power_by_country'
+# 
+# xpath <- '//*[@id="content-collapsible-block-0"]/table[2]#'
+# 
+# table <- html(url) %>%
+# html_node(xpath = xpath) %>%
+# html_table(fill = T)
+
+```
+
+
+# AEP Function
+
+```{r}
+pc <- read.table('./powerCurve.txt', header = T)
+g <- ggplot(pc, aes(ws, power))
+g <- g + geom_point()
+g <- g + labs (title='', x = "wind speed [m/s]", y = "power [kW]")
+g <- g + theme_bw()
+g
+```
+
+```{r}
+aepCalculation <- function(ws, power, annual_mean_ws) {
+  # constants
+  N_h <- 8760 # hours per year
+  
+  df <- data.frame(wind_speed = ws,
+                   power = power)
+  df$F <- 1 - exp(-pi/4*(df$wind_speed/annual_mean_ws)**2)
+  
+  # calculate nr. of rows of dataframe
+  N <- nrow(df)
+  
+  # initialize column aep
+  df$aep <- NA
+  
+  # calculate first cell of "aep" column
+  df$aep[1] <- df$F[1] * df$power[1]/2*N_h
+  
+  # iterate through lines 2 to end of df
+  for (i in 2:N) {
+    df$aep[i] <- N_h * (df$F[i]- df$F[i-1])*(df$power[i]+df$power[i-1])/2
+    
+  } # end for
+  aep_total <- sum(df$aep)
+  return(aep_total)
+}
+  
+
+aepCalculation(ws = pc$ws, power = pc$power, annual_mean_ws = 8)
+```
+
+
+# Affairs Analysis
+
+## Data Import
+
+```{r}
+affairs <- read.csv(file = './Affairs.csv')
+affairs
+
+```
+
+
+```{r}
+summary(affairs)
+ncol(affairs)
+nrow(affairs)
+```
+
+
+## Hypothesis 1: Men are more likely to have affairs than woman
+```{r}
+affairs_likelihood <- affairs %>% 
+  mutate(affair_flag = ifelse(nbaffairs>0, 1, 0)) %>% 
+  group_by(sex) %>% 
+  summarise(nr_affair = sum(affair_flag), 
+            count = n(),
+            affair_ratio = nr_affair/count * 100 )
+
+g <- ggplot(affairs_likelihood, aes(x = sex,
+                                    y = affair_ratio))
+g <- g + geom_col()
+g
+
+```
+
+
+## Hypothesis 2: Religious Politicians are less likely to have an affair.
+
+```{r}
+affairs_likelihood_rel <- affairs %>% 
+  mutate(affair_flag = ifelse(nbaffairs>0, 1, 0)) %>% 
+  group_by(sex, religious) %>% 
+  summarise(nr_affair = sum(affair_flag), 
+            count = n(),
+            affair_ratio = nr_affair/count * 100 )
+
+g <- ggplot(affairs_likelihood_rel, aes(x = religious,
+                                    y = affair_ratio,
+                                    fill = sex))
+g <- g + geom_col(position = "dodge")
+
+g <- g + labs(title = "Likelihood of having an affair", x= "Religiousness [-]",
+              y = "Affairs Likelihood [%]")
+
+g <- g + theme_bw()
+g
+
+```
+
+Hypothesis 3: Older, male politicians are more likely to have an affair
+
+
+```{r}
+affairs_likelihood_rel <- affairs %>% 
+  mutate(affair_flag = ifelse(nbaffairs>0, 1, 0)) %>% 
+  mutate(age_binned = age %/% 10 * 10) %>% 
+  group_by(sex, age_binned) %>% 
+  summarise(nr_affair = sum(affair_flag), 
+            count = n(),
+            affair_ratio = nr_affair/count * 100) %>% 
+  filter(count >=6) 
+
+g <- ggplot(affairs_likelihood_rel, aes(x = age_binned,
+                                    y = affair_ratio,
+                                    fill = sex))
+g <- g + geom_col(position = "dodge")
+
+g <- g + labs(title = "Likelihood of having an affair", 
+              x= "Religiousness [-]",
+              y = "Affairs Likelihood [%]")
+
+g <- g + theme_bw()
+g
+```
+

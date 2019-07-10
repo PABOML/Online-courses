@@ -1,0 +1,106 @@
+---
+title: "Exercise_20170920"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+You will work with "diamonds" dataset. First, **ggplot2** is loaded. This package also includes this dataset.
+
+```{r packages}
+suppressPackageStartupMessages(library(dplyr))
+library(ggplot2)
+```
+
+Data is loaded with *data()*.
+
+```{r}
+data("diamonds")
+diamonds
+```
+
+# Exercise 1
+
+a) Calculate for each "clarity"-group of the diamonds the min, max, median and standard deviation of price. The column names are "price_median", "price_min", "price_max", and "price_sd".
+
+b) Which clarity refers to the highest median price? (Use the result from a) and calculate this result with filtering. Hint: check out function **which.max()**. It might help)
+
+```{r}
+# a)
+diamonds_clarity_price <- diamonds %>% 
+  group_by(clarity) %>% 
+  summarise(price_median = median(price),
+            price_min = min(price),
+            price_max = max(price),
+            price_sd = sd(price))
+
+# b)
+diamonds_clarity_price$clarity[which.max(diamonds_clarity_price$price_median)]
+```
+
+# Exercise 2
+
+Calculate an additional variable in the dataframe *diamonds*, called "outer_volume", which is the product of x, y, and z.
+
+```{r}
+diamonds <- diamonds %>% 
+  mutate (outer_volume = x * y * z)
+# alternative
+diamonds$outer_volume <- diamonds$x * diamonds$y * diamonds$z
+```
+
+# Exercise 3
+
+You will create a plot, that is modified and extended in each sub-task.
+
+a) Create a scatter-plot with **ggplot2**, showing "price" vs. "outer_volume".
+
+b) Find out how you can show only a zoomed area and show only data in the range of "outer_volume" of 0 to 600 mm^3.
+
+c) Find out how to modify x- and y-labels and rename x-label "Outer Volume [mm^3]" and y-label "Price [$]"
+
+d) Find out how to define a plot-title and use the title "Diamonds: Price and Outer Volume"
+
+e) Besides x and y-variable, also color can be used as additional dimension for plotting. Find out how to plot each points color with reference to its "clarity".
+
+```{r}
+g <- ggplot (diamonds, aes(x = outer_volume, y = price, col = clarity))
+g <- g + geom_point(alpha = .1)
+g <- g + labs(y = "Price [$]", x = "Outer Volume [mm^3]", title = "Diamonds", subtitle = "Price and Outer Volume")
+g <- g + coord_cartesian(xlim = c(0, 600))
+# alternative
+# g <- g + xlab ("Outer Volume [mm^3]")
+# g <- g + ylab ("Price [$]")
+# g <- g + ggtitle ("Diamonds: Price and Outer Volume")
+g
+```
+
+# Exercise 4
+
+a) Create a filtered dataset, called **diamonds_filt**, which filters data for
+
+- outer_volume > 0
+
+- price between 500 and 15000 $.
+
+b) Calculate the filter-ratio in percentage (nr. of kept observations in filtered vs. original (unfiltered) dataset)? 
+
+```{r}
+diamonds_filt <- diamonds %>% 
+  filter (outer_volume > 0) %>% 
+  filter (price > 500 & price < 15000)
+
+filter_ratio <- nrow(diamonds_filt) / nrow(diamonds) * 100
+```
+
+Good Luck!
+

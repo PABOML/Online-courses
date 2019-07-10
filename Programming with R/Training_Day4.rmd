@@ -1,0 +1,267 @@
+---
+title: "Data Science with R (Day 4)"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+    fig_width: 8
+    fig_height: 6
+    fig_caption: true
+    css: styles.css
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+```{r}
+library(tidyverse)
+```
+
+# Learning Objectives
+
+- Repetition on Data Manipulation and Plotting
+
+- Document Styles with YAML
+
+- Web Scraping
+
+- Functions
+
+- Formatting of Rmarkdown
+
+- CSS
+
+- Integrate math formulas
+
+- Tabbed sections
+
+# Open Questions
+
+# Last exercise
+
+discuss last exercise
+
+# Repetition on Data Manipulation and Plotting
+
+The dataset includes data on affairs of politicians. We will try to find out, if and how the number of affairs is related to sex, age, years of marriage, having children, being religious, educational level, occupation.
+
+If you are interested in the authors publication you can read it here
+
+[https://fairmodel.econ.yale.edu/rayfair/pdf/1978a200.pdf]
+
+## Data Preparation
+
+### Data Import 
+
+We load data from this location.
+
+[http://koaning.io/theme/data/affairs.csv]
+
+```{r}
+library(pacman)
+p_load(tidyverse)
+```
+
+```{r}
+url <- "http://koaning.io/theme/data/affairs.csv"
+filename <- "Affairs.csv"
+download.file(url = url, destfile = filename)
+```
+
+```{r}
+affairs <- read_csv(file = filename, col_names = T)
+```
+
+### Data Understanding
+
+We mMake ourselves familiar with data. Which columns are included? What is their range, min, max, median?
+
+```{r}
+summary(affairs)
+```
+
+
+## Analysis
+
+### Hypothesis 1: Men are more likely to have affairs than women.
+
+Variable "nbaffairs" defines the intensity of the affair in terms of having intercourse (0 = none, 12 = daily). Please create an additional (binary) variable "affair_yes_no", that is 1 for "nbaffairs" > 0 and 0 for "nbaffairs" == 0.
+
+Please plot the result in a suitable graph.
+
+```{r}
+aff_likelihood <- affairs %>% 
+  mutate (affair_yes_no = ifelse(nbaffairs > 0, 1, 0)) %>% 
+  group_by(sex) %>% 
+  summarise (affair = sum (affair_yes_no),
+             count = n(),
+             affair_ratio = affair / count * 100)
+
+g <- ggplot(aff_likelihood, aes(sex, affair_ratio))
+g <- g + geom_col(fill = "blue")
+g <- g + labs (title = "Likelihood of Having an Affair", x = "Sex", y = "Proportion [%]")
+g <- g + theme_bw()
+g
+```
+
+### Hypothesis 2: Religious Politicians are less likely to have an affair.
+
+```{r}
+affairs <- affairs %>% 
+  mutate (affair_yes_no = ifelse(nbaffairs > 0, 1, 0)) 
+
+aff_likelihood <- affairs %>%
+  group_by(sex, religious) %>% 
+  summarise (affair = sum (affair_yes_no),
+             count = n(),
+             affair_ratio = affair / count * 100)
+
+g <- ggplot(aff_likelihood, aes(sex, affair_ratio, fill = factor(religious)))
+g <- g + geom_col(position = "dodge")
+g <- g + labs (title = "Likelihood of Having an Affair for Sex and Religiousness", x = "Sex", y = "Proportion [%]")
+g <- g + scale_fill_discrete(name = "Religiousness")
+g <- g + theme_bw()
+g
+```
+
+### Hypothesis 3a: Older, Male Politicians are more likely to have an affair.
+
+Age should not be used directly, but rather binned for years 21-30, 31-40, ...
+
+A small number of politicians with affairs is not representative, so please filter the dataset, if there are less than 3.
+
+```{r}
+aff_age <- affairs %>% 
+  mutate (age_bin = paste0(age %/% 10 * 10 + 1, "-", age %/% 10 * 10 + 10)) %>% 
+  group_by(age_bin, sex) %>% 
+  summarise(affair_count = sum (affair_yes_no),
+            count = n(),
+            affair_prob = affair_count / count * 100) %>% 
+  filter (affair_count > 3)
+
+g <- ggplot(aff_age, aes(x = age_bin, y = affair_prob, fill = sex))
+g <- g + geom_col(position = "dodge")
+g <- g + labs (title = "Impact of Age and Sex on Having an Affair", x = "Age Class", y = "Affair-Probability [%]")
+g <- g + theme_bw()
+g
+```
+
+### Hypothesis 3b: identical to 3a
+
+Here, please use a heatmap for visualisation.
+
+```{r}
+library(pheatmap)
+aff_age_spread <- aff_age %>% 
+  select (-affair_count, -count) %>% 
+  spread (key = "age_bin", value = "affair_prob")
+annotation <- aff_age_spread$sex
+
+pheatmap(aff_age_spread[, 2:5], 
+         cluster_rows = F, 
+         cluster_cols = F, 
+         main = "Affairs for Age and Sex", 
+         display_numbers = T, 
+         number_format = "%.0f")
+```
+
+### Hypothesis 4: Ratio of Affairs increases with Years of Marriage.
+
+```{r}
+aff_ym_nbaffairs <- affairs %>% 
+  group_by(ym) %>% 
+  summarise(affairs = sum(affair_yes_no),
+            count = n(),
+            affair_ratio = affairs / count * 100
+            )
+
+g <- ggplot(aff_ym_nbaffairs, aes(ym, affairs))
+g <- g + geom_smooth(method = "lm", se = F)
+g <- g + geom_point()
+g <- g + labs (title = "Ratio of Having an Affair and Years of Marriage", 
+               x = "Years of Marriage [-]", 
+               y = "Ratio of Having an Affair [%]")
+g <- g + theme_bw()
+g <- g + geom_text(aes(label = paste(round(affair_ratio, 1), "%")), vjust = 1.1)
+g <- g + scale_x_continuous(breaks = seq(0, 16, 2))
+g
+```
+
+# Web Scraping
+
+```{r}
+library(rvest)
+```
+
+```{r}
+url <- "https://en.wikipedia.org/wiki/Wind_power_by_country"
+xpath <- '//*[@id="mw-content-text"]/div/table[3]'
+
+table <- html(url) %>% 
+    html_node(xpath =  xpath) %>% 
+    html_table(fill = T)
+
+```
+
+# Functions
+
+We will define a function for calculating AEP for a given power curve.
+
+```{r}
+Aep <- function(ws_mean = 8 , k = 2, ws, power, cutout, step_size) {
+  N_h <- 8760  # hours per year
+  df <- data.frame(ws = ws, 
+                   power = power)
+  df$F <- 1 - exp(-pi/4*(df$ws/ws_mean)**2)
+  N <- nrow(df)  # number of bins
+  df$aep <- NA
+  df$aep[1] <- df$F[1] * df$power[1] / 2 * N_h
+  for (i in 2:N) {
+    df$aep[i] <- N_h * (df$F[i]-df$F[i-1])*(df$power[i-1]+df$power[i])/2 
+  }
+  aep_sum <- sum(df$aep, na.rm = T)
+  return(aep_sum)
+}
+```
+
+# Document Styles with YAML
+
+YAML stands for Yet Another Meta Language. It defines the look and feel of HTML-document.
+
+More information can be found [http://rmarkdown.rstudio.com/html_document_format.html].
+
+# Formatting of Rmarkdown Text
+
+Rmarkdown text can be formatted. All formats are described in Rmarkdown Reference [https://www.rstudio.com/wp-content/uploads/2015/03/rmarkdown-reference.pdf].
+
+
+# Custom Style Sheets
+
+You can manually adapt Rmarkdown layout with CSS.
+
+More information to be found at:
+<https://rmarkdown.rstudio.com/html_document_format.html>
+
+# Math formulas
+
+You can add mathematical formulas as with LaTex.
+
+$$ws_{norm} = ws_{meas} \cdot \frac{\rho_{meas}}{\rho_{standard}}^{0.333}$$
+
+# Tabbed sections {.tabset}
+
+## Tab1 
+
+some content here.
+
+## Tab2
+
+some more content here.
+
+## Tab3
+
+much more content here.

@@ -1,0 +1,111 @@
+---
+title: "Data sciene with R - Day 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+
+Install the package babynames.
+We can use a package manager
+
+```{r}
+# install.packages ("babynames")
+# install.packages("tidyverse")
+install.packages("pacman")
+```
+
+If you want to use the package, you have to load it.
+```{r}
+# library(babynames) # You can use quotes but you dont need to.
+# library("tidyverse")
+library("pacman")
+p_load(babynames, tidyverse, plotly)
+```
+
+# Data preparation
+```{r}
+data("babynames")
+babynames
+```
+
+Get the structure of an object, no of rows, no of columns, dimensions of object.
+```{r}
+str(babynames)
+nrow(babynames)
+ncol(babynames)
+dim(babynames)
+```
+
+## Accessing Element
+
+You can access rows.
+
+```{r}
+babynames [4:6,] # returns line no 4-6
+babynames[c(1, 4),] # returns line no 1 and 4
+```
+
+You can access colums, too
+
+```{r}
+babynames[, c(1, 3)] # access column 1 and 3
+```
+
+```{r}
+babynames[2:3, 5]
+```
+
+# Excursus: Piping
+
+```{r}
+x <- c(0.1, .5, .7, 0.9, 1.3)
+x %>%
+    log () %>%
+    diff() %>%
+    exp() %>%
+    round(0)
+
+```
+
+```{r}
+most_pop_female_2015<- babynames %>% 
+  filter(year == 2015) %>% 
+  filter (sex == 'F') %>% 
+  arrange(desc(prop)) %>% 
+  head(5)
+```
+
+
+# Data visualization
+
+```{r}
+most_pop_names <- most_pop_female_2015$name
+babynames_to_plot <- babynames %>% 
+  filter(sex == 'F') %>% 
+  filter(name %in% most_pop_names) %>% 
+  mutate(prop = prop * 100)
+  unique(babynames_to_plot$name) #check if filter works
+```
+
+```{r}
+g <- ggplot(data = babynames_to_plot,
+            aes(x = year,
+                y = prop,
+                col = name))
+g <- g + geom_line()
+g <- g + labs(x = "Year [-]",
+              y = "Proportion [%]",
+              title = "Most popular female babynames from 1880 to 2015")
+g
+```
+
+Now we create a dynamic plot.
+
+```{r}
+ggplotly(g)
+```
+

@@ -1,0 +1,168 @@
+---
+title: "R: Exercise of 20.09.2017"
+output: html_document
+  html_document:
+    toc: true
+    toc_depth: 1
+    toc_float: true
+    number_sections: false
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F, warning = F)
+```
+
+# Introduction
+
+```{r packages}
+library(tidyverse)
+```
+
+Data is loaded with *data()*. "diamonds" is a dataset provided by *ggplot2* package.
+
+```{r}
+data("diamonds")
+diamonds
+```
+
+# Exercise 1
+
+You will work with "diamonds" dataset. First, **ggplot2** is loaded. This package also includes this dataset.
+
+
+a) Calculate for each "clarity"-group of the diamonds the min, max, median and standard deviation of price. The column names are "price_median", "price_min", "price_max", and "price_sd". 
+
+b) Which clarity refers to the highest median price? (Use the result from a) and calculate this 
+result with filtering. 
+
+Hint for a) and b): use **group_by()** and **summarise()** functions from *dplyr* package.
+
+```{r}
+# Exercise 1a)
+filter_clarity_diamonds <- diamonds %>% 
+  group_by(clarity) %>% 
+  summarise(price_min = min(price),
+            price_max = max(price),
+            price_median = median(price),
+            price_sd = sd(price)) %>% 
+ 
+# Exercise 1b)
+filter(price_median == max(price_median))
+filter_clarity_diamonds
+
+```
+
+
+
+# Exercise 2
+
+Calculate an additional variable in the dataframe *diamonds*, called "outer_volume", which is the product of x, y, and z.
+
+```{r}
+# Exercise 2)
+outer_volume <- function(x,z,y){
+  volume <- x * z * y
+  return(volume)
+} 
+
+```
+
+
+```{r}
+outer_volume(x = 1, y = 1, z = 1)
+```
+
+```{r}
+ 
+  outer_volume(x = diamonds$x, y = diamonds$y, z = diamonds$z)
+
+
+```
+
+
+# Exercise 3
+
+You will create a plot, that is modified and extended in each sub-task.
+
+a) Create a scatter-plot with **ggplot2()**, showing "price" vs. "outer_volume".
+
+b) Find out how you can show only a zoomed area and show only data in the range of "outer_volume" of 0 to 600 mm^3.
+
+c) Find out how to modify x- and y-labels and rename x-label "Outer Volume [mm^3]" and y-label "Price [$]"
+
+d) Find out how to define a plot-title and use the title "Diamonds: Price and Outer Volume"
+
+e) Besides x and y-variable, also color can be used as additional dimension for plotting. Find out how to plot each points color with reference to its "clarity".
+
+```{r}
+# Exercise 3)
+g <- ggplot(diamonds, aes(x=outer_volume(x = diamonds$x, y = diamonds$y, z = diamonds$z), y=price, col = clarity))
+g <- g + geom_point()
+g <- g + labs(title = 'Diamonds: Price and Outer Volume', x = 'Outer volume [mm^3]', y = 'Price [$]')
+g <- g + theme_bw()
+g <- g + coord_cartesian(xlim=c(0, 600), ylim=c(0, 20000))
+g
+```
+
+# Exercise 4
+
+a) Create a filtered dataset, called **diamonds_filt**, which filters data for
+
+- outer_volume > 0
+
+- price between 500 and 15000 $.
+
+b) Calculate the filter-ratio in percentage (nr. of kept observations in filtered vs. original (unfiltered) dataset)? 
+
+```{r}
+# Exercise 4af)
+diamonds_filt <- diamonds %>% 
+  filter(outer_volume(x = diamonds$x, y = diamonds$y, z = diamonds$z) > 0 & diamonds$price > 500 & diamonds$price < 15000)
+diamonds_filt
+  
+
+# Exercise 4b)
+filt_ratio <- function(a,b){
+  filt_ratio <- a / b
+  return(filt_ratio)
+}
+  
+filt_ratio(a=nrow(diamonds_filt), b=nrow(diamonds))
+filt_ratio
+
+```
+
+
+Good Luck!
+
+# Exercise 5
+
+This dataframe shows wind speed measurements for three different timestamps and three different heights. It is originally in tidy-format.  
+
+```{r}
+wind_speeds <- data.frame(timestamp = c(1, 2, 3, 1, 2, 3, 1, 2, 3),
+                     height = c(60, 60, 60, 80, 80, 80, 100, 100, 100),
+                     ws = c(5, 5.1, 4.9, 6, 6.05, 6.2, 7, 7.3, 7.15))
+wind_speeds
+```
+
+a) Please transform the data into wide-format.
+
+```{r}
+wind_speeds_wide <- wind_speeds %>% 
+  spread(key='height', value ='ws')
+wind_speeds_wide
+```
+
+
+b) Use the wide-formatted data and transform it back to get the original data.
+
+```{r}
+wind_speeds_tidy <- wind_speeds_wide %>% 
+  gather(key='height', value='ws', 2:4)
+wind_speeds_tidy
+```
+
+
+Hint: use functions **gather()** and **spread()**.
