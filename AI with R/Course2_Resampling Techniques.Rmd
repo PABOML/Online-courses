@@ -1,0 +1,84 @@
+---
+title: "Course2: Resampling Techniques"
+author: "Paul"
+date: "29 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(caret)
+#install.packages('tidyr')
+#install.packages('corrplot')
+library(tidyr)
+library(corrplot)
+#install.packages('keras')
+library(keras)
+```
+
+
+```{r}
+df<- read.csv('data/winequality-red.csv',
+              sep = ';')
+summary(df)
+```
+
+
+
+
+```{r}
+set.seed(123)
+source('./train_val_test_split.R')
+c(train, val, test) %<-% train_val_test_split(df=df,
+                                              train_ratio=0.8,
+                                              val_ratio=0.1,
+                                              test_ratio=0.1)
+```
+
+```{r}
+model_train_val <- caret::train(data=train, quality ~.,
+                                method ='lm')
+
+train$quality_pred <- predict(model_train_val, train)
+val$quality_pred <- predict(model_train_val, val)
+```
+
+# quality
+
+```{r}
+postResample(pred=train$quality_pred, obs=train$quality)
+```
+
+```{r}
+postResample(pred=val$quality_pred, obs = val$quality)
+```
+
+# 10-FOld Cross Validation
+
+```{r}
+train_control <- trainControl(method='cv', number=10)
+model_10_fold_cv <- caret::train(data=train, 
+                                 quality ~.,
+                                method ='lm',
+                                trControl = train_control)
+model_10_fold_cv
+```
+
+
+#Leave one out cross validation (LOOCV)
+
+```{r}
+train_control_loocv <- trainControl(method='LOOCV', number=10)
+model_10_fold_loocv <- caret::train(data=train, 
+                                 quality ~.,
+                                method ='lm',
+                                trControl = train_control_loocv)
+model_10_fold_loocv
+```
+

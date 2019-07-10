@@ -1,0 +1,106 @@
+---
+title: "Course1: Univariate linear regression"
+author: "Paul"
+date: "26 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Understanding (from CRISP DM model)
+We will work with dataset on StarWars characters. We want to predict mass by using height as predictors.
+
+```{r}
+library(dplyr)
+#install.packages('ggplot2')
+#install.packages('caret')
+library(ggplot2)
+library(caret)
+```
+
+```{r}
+data('starwars')
+starwars
+```
+
+
+## Visualization
+
+```{r}
+plot_height_mass <- function(df){
+  g <- ggplot(df, aes(height,mass))
+  g <- g + geom_point()
+  g <- g + geom_smooth(method = 'lm', se=F)
+  g
+}
+
+plot_height_mass(starwars)
+```
+
+# Data Preparation
+```{r}
+starwars_filt<- starwars %>%
+  filter(mass < 1000)
+
+plot_height_mass(starwars_filt)
+```
+
+## Train / Validation Split
+
+```{r}
+set.seed(123)
+n_obs <- nrow(starwars_filt)
+train_ratio <- 0.6
+train_size<-floor(train_ratio*n_obs)
+train_positions <- sample(1:n_obs, train_size)
+
+train <- starwars_filt[train_positions,]
+valid <- starwars_filt[-train_positions,]
+
+```
+
+# Modeling
+Linear models are created with *lm()*
+
+```{r}
+model <- lm(data=train, 
+            formula=mass~height)
+```
+
+
+```{r}
+summary(model)
+```
+
+# Predictions
+
+```{r}
+valid$mass_predictions <- predict(object = model, 
+                                  newdata = valid)
+```
+
+
+```{r}
+g <- ggplot(valid, aes(x=height, y=mass))
+g <- g + geom_point()
+g <- g + geom_smooth(method='lm', se=F)
+g<- g+ geom_point(aes(y= mass_predictions),
+                    col = 'red',
+                    alpha =.3)
+g
+```
+
+
+```{r}
+g <- ggplot(valid, aes(mass, mass_predictions))
+g <- g+ geom_point()
+g
+```
+
+```{r}
+R2(pred=valid$mass_predictions,
+   obs=valid$mass)
+```
+

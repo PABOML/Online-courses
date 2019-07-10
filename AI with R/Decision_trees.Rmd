@@ -1,0 +1,124 @@
+---
+stitle: "Decision Trees"
+author: "Paul"
+date: "3 Dezember 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(dplyr)
+#install.packages('rpart')
+#install.packages('rpart.plot')
+library(rpart)
+library(rpart.plot)
+library(keras)
+#install.packages('rattle')
+library(rattle)
+source('./train_val_test_split.R')
+```
+
+```{r}
+rm(list=ls())
+credit_approval <- readRDS('./data/CreditApproval.RDS')
+```
+
+# Data Preprocessing
+
+```{r}
+credit_approval <- credit_approval %>%
+  mutate(Approved=ifelse(Approved=='+', 1, 0)) %>%
+  mutate(Approved = as.factor(Approved)) %>%
+ # mutate(Income = log(Income)) %>%
+  select(-ZipCode)
+
+summary(credit_approval)
+```
+
+```{r}
+credit_approval$Approved %>% table()
+```
+
+```{r}
+383/length(credit_approval$Approved) # Naive Classifier as Baseline, because data is not balanced.
+```
+
+# Train/ Validation / Test Split
+
+```{r}
+set.seed(123)
+c(train, val, test) %<-% train_val_test_split(credit_approval, train_ratio =0.8, val_ratio = 0.1, test_ratio = 0.1)
+```
+
+
+```{r}
+set.seed(123)
+decision_tree_fit <- rpart(formula=Approved ~ ., 
+                           data=train)
+```
+
+```{r}
+rpart.plot(decision_tree_fit)
+```
+
+```{r}
+fancyRpartPlot(decision_tree_fit)
+```
+
+```{r}
+asRules(decision_tree_fit)
+```
+
+# Predictions
+
+```{r}
+val$Approved_pred_prob <- predict(decision_tree_fit, newdata=val)[, 2]
+
+val$Approved_pred_class <- ifelse(val$Approved_pred_prob > 0.5, 1, 0)
+
+```
+
+
+```{r}
+cm <- table(actual =val$Approved, predicted = val$Approved_pred_class)
+cm
+```
+
+Calculate Accuracy
+
+```{r}
+sum(diag(cm))/sum(cm)
+```
+
+# Visualization
+
+
+```{r}
+
+```
+
+```{r}
+set.seed(123)
+decision_tree_fit <- rpart(formula=Approved ~ Income + CreditScore, 
+                           data=train)
+
+df_grid <- expand.grid(Income = seq(0, 10, 1),
+                       CreditScore = seq(0, 10, 1))
+
+df_grid$y_pred_prob<- predict(decision_tree_fit, newdata = df_grid)[, 2]
+
+df_grid$y_pred_class <- ifelse(df_grid$y_pred_prob > 0.5, 1, 0)
+```
+
+```{r}
+g <- ggplot(df_grid, aes(x=Income,
+                         y=CreditScore,
+                         col=y_pred_class))
+g <- g + geom_raster(aes(fill=factor(y_pred_class)))
+g
+```
+

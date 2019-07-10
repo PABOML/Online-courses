@@ -1,0 +1,98 @@
+---
+title: "Support Vector Machines"
+author: "Bert Gollnick"
+date: "30 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(keras)
+library(e1071)
+source("./functions/train_val_test.R")
+```
+
+# Data Preparation
+
+## Data Creation
+
+```{r}
+set.seed(123)
+df <- dplyr::tibble(x = runif(n = 2000, min = -10, max = 10),
+                              y = runif(n = 2000, min = -10, max = 10)) %>%
+  dplyr::mutate(z = x^2+y^2) %>% 
+      dplyr::mutate (class = ifelse(z < 50, "A", "B")) %>% 
+      dplyr::mutate(class = as.factor(class))
+
+```
+
+## Train / Validation Split
+
+```{r}
+c(train, val, test) %<-% train_val_test_split(df = df, train_ratio = 0.8, val_ratio = 0.2, test_ratio = 0)
+```
+
+## Visualisation
+
+```{r}
+g <- ggplot(train, aes(x, y, col = class))
+g <- g + geom_point()
+g <- g + theme_bw()
+g
+
+```
+
+# Model
+
+```{r}
+model_svm <- svm(data = train, class ~ x + y, kernel = "radial")
+```
+
+```{r}
+plot(model_svm, train, y ~ x)
+```
+
+# Predictions
+
+```{r}
+val$class_pred <- predict(object = model_svm, 
+                          newdata = val)
+```
+
+# Model Performance
+
+## Confusion Matrix
+
+```{r}
+conf_mat <- table(predicted = val$class_pred, actual = val$class)
+conf_mat
+```
+
+```{r}
+caret::confusionMatrix(conf_mat)
+```
+
+## Hyperparameter Tuning
+
+You can modify 
+
+- kernel
+
+- cost
+
+- gamma
+
+```{r}
+model_svm <- svm(data = train, class ~ x + y, kernel = "radial", gamma = 3, cost = 8)
+val$class_pred <- predict(object = model_svm, 
+                          newdata = val)
+conf_mat <- table(predicted = val$class_pred, actual = val$class)
+caret::confusionMatrix(conf_mat)
+
+```
+

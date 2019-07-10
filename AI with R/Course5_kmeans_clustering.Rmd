@@ -1,0 +1,91 @@
+---
+title: "Course5_kmeans Clustering"
+author: "Paul"
+date: "10 Dezember 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(keras))
+suppressPackageStartupMessages(library(caret))
+suppressPackageStartupMessages(library(e1071))
+suppressPackageStartupMessages(library(ggplot2))
+
+source("./train_val_test_split.R")
+```
+
+
+
+Import the file to an object called "zoo_raw".
+
+```{r}
+zoo_raw <- read.csv('./data/zoo.csv', header=T)
+zoo_raw %>% head()
+```
+
+
+```{r}
+table(zoo_raw$class_type)
+```
+
+```{r}
+zoo_scale <- zoo_raw %>%
+  dplyr::select(-animal_name, -class_type) %>%
+  scale
+```
+
+
+# Number of Clusters
+
+```{r}
+set.seed(123)
+k_max <- 15
+within_cluster_sum_square <- tibble(k=1: k_max,
+                                    wcss =NA)
+
+for (i in within_cluster_sum_square$k){
+  within_cluster_sum_square$wcss[i] <- kmeans(x=zoo_scale, centers = i, nstart=10)$tot.withinss
+}
+```
+
+```{r}
+g <- ggplot(within_cluster_sum_square, aes(k, wcss))
+g <- g+ geom_line()
+g <- g+ geom_point()
+g
+```
+
+# Model Creation
+
+
+```{r}
+set.seed(123)
+mod_cluster <- kmeans(x=zoo_scale, centers = 7)
+```
+
+```{r}
+zoo_raw$cluster <- mod_cluster$cluster
+```
+
+```{r}
+g <- ggplot(zoo_raw, aes(x=class_type, 
+                         y=cluster,
+                         col = factor(class_type)))
+g <- g + geom_jitter()
+g
+
+```
+
+```{r}
+zoo_raw$animal_name[zoo_raw$class_type==1 & zoo_raw$cluster!=3]
+```
+
+```{r}
+zoo_raw$animal_name[zoo_raw$class_type==3 & zoo_raw$cluster==6] # outlier 
+```
+

@@ -1,0 +1,76 @@
+---
+title: "Course5_dbscan"
+author: "Paul"
+date: "10 Dezember 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(keras))
+suppressPackageStartupMessages(library(caret))
+suppressPackageStartupMessages(library(e1071))
+suppressPackageStartupMessages(library(ggplot2))
+#install.packages('dbscan')
+library(dbscan)
+```
+
+
+# Data preparation
+
+## Data creation
+```{r}
+set.seed(123)
+n_points <- 2000
+
+df <- tibble(x=runif(n=n_points, min =-10, max=10),
+             y=runif(n=n_points, min =-10, max=10),
+             z=x^2+y^2) %>%
+  mutate(class=ifelse(z < 10, 'A', 'B')) %>%
+  mutate(class= as.factor(class)) %>%
+  filter((z< 10) | (z > 80 & z < 100))
+```
+
+Visualization:
+
+```{r}
+g <- ggplot(df, aes(x,y,col = class))
+g <- g + geom_point()
+g
+
+```
+
+# Modeling
+transform dataframe to matrix
+
+```{r}
+df_mat <- as.matrix(df[, 1:2])
+```
+
+We need to get an estimate of eps parameter.
+
+```{r}
+kNNdistplot(df_mat, k=2)
+```
+
+```{r}
+epsilon <- 1.4 
+min_points <- 10 
+
+dbscan_result <- dbscan(x=df_mat, eps=epsilon, minPts=min_points)
+
+df$cluster <- dbscan_result$cluster
+```
+
+```{r}
+g <- ggplot(df, aes(x,y,col = factor(cluster)))
+g <- g + geom_point()
+g
+
+```
+

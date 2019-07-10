@@ -1,0 +1,168 @@
+---
+title: "ROC"
+author: "Paul"
+date: "3 Dezember 2018"
+output: 
+  html_document:
+  toc: true
+  toc_float:true
+  code_folding: hide
+  number_sections:hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(keras) # requrired for multi-assignment
+#install.packages("randomForest")
+library(randomForest)
+#install.packages('e1071') # for Support Vector machines
+library(e1071)
+source('./train_val_test_split.R')
+```
+
+
+
+```{r}
+rm(list=ls())
+df <- read.csv('./data/adult.data', header=F)
+```
+
+# Data Preparation
+Setting the column names correctly.
+
+```{r}
+column_names <- c("age", "workclass", "fnlwgt", "education", "education-num", "marital_status", "occupation", "relationship", "race", "sex", "capital_gain", "capital_loss", "hours_per_week", "native-country", "income")
+
+colnames(df) <- column_names
+df
+```
+
+Delete not required variables
+
+```{r}
+df$'education-num' <- NULL
+df$'native-country'<- NULL
+```
+
+
+```{r}
+df$income <- df$income %>% as.numeric()%>%
+  -1  %>%
+  as.factor()
+df$income %>% unique()
+```
+
+# Train, Validation, Test Split
+
+```{r}
+c(train, val, test) %<-% train_val_test_split(df)
+```
+
+
+# Modeling
+
+## Logistic Regression
+```{r}
+log_reg_fit <- glm(formula=income ~., 
+                   data=train, 
+                   family='binomial' )
+#summary(log_reg_fit)
+#exp(coef(log_reg_fit))
+```
+
+```{r}
+predictions_log_reg_fit <- predict(object = log_reg_fit,
+                                   newdata=val,
+                                   type='response')
+#predictions_log_reg_fit %>% head()
+
+predictions_log_reg_class <- 
+  ifelse(predictions_log_reg_fit < 0.5, 0, 1)
+```
+
+
+## Random Forest
+
+```{r}
+rf_fit <- randomForest(income ~ .,
+                       data=train,
+                       probabilities=T)
+
+predictions_rf <- predict (rf_fit, newdata= val,
+                           type='prob')
+```
+
+```{r}
+predictions_rf_0 <- predictions_rf[, 1]
+predictions_rf_1 <- predictions_rf[, 2]
+```
+
+
+## Support Vector Machines
+
+```{r}
+svm_fit <- svm(income ~.,
+               data=train,
+               probability=T)
+
+predictions_svm <- predict(svm_fit, 
+                           newdata=val,
+                           probability=T)
+
+predictions_svm_0 <- attr(predictions_svm, 'probabilities')[, 1]
+predictions_svm_0 <-  attr(predictions_svm, 'probabilities')[, 2]
+```
+
+
+# Model Evaluation
+
+## Confusion Matrix
+
+```{r}
+cm <- table(actual=val$income,
+      pred=predictions_log_reg_class)
+
+cm
+```
+
+```{r}
+sum(diag(cm))/sum(cm) * 100
+```
+
+
+Undewrstand what the baseline (naive classifier) is:
+
+```{r}
+table(val$income)
+4979 / length(val$income)
+```
+
+## Calculating TP, FP, FN, TN
+
+```{r}
+threshold <- 0.6
+val$group <- NA
+val$group[predictions_log_reg_fit > threshold & val$income == '1'] <- 'TP'
+val$group[predictions_log_reg_fit > threshold & val$income == '0'] <- 'FP'
+val$group[predictions_log_reg_fit <= threshold & val$income == '1'] <- 'FN'
+val$group[predictions_log_reg_fit <= threshold & val$income == '0'] <- 'TN'
+```
+
+```{r}
+val$income_pred_prob <- predictions_log_reg_fit
+g <- ggplot(val, aes(x=income, 
+                     y= income_pred_prob, 
+                     col =group))
+g <- g + geom_jitter()
+g
+```
+
+
+
+
+

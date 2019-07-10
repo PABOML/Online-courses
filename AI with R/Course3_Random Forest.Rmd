@@ -1,0 +1,168 @@
+---
+title: "Course3:Random Forest"
+author: "Paul"
+date: "6 Dezember 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+install.packages('tidyverse')
+library(tidyverse)  # for data manipulation
+library(randomForest)  # for random forest model creation
+library(keras)  # for multiassignment operation
+library(caret)  # for model performance
+library(reshape2)
+source('./train_val_test_split.R')
+```
+
+```{r}
+rm(list=ls()) # delete all objects
+credit_approval <- readRDS('./data/CreditApproval.RDS')
+summary(credit_approval)
+```
+
+The class "Approved" contains - and +. These need to be turned into 0 and 1s.
+
+```{r}
+credit_approval <- credit_approval %>%
+  mutate(Approved = ifelse(Approved == '+', 1, 0))
+```
+
+
+```{r}
+credit_approval$Approved %>% table
+```
+
+```{r}
+credit_approval$Approved  <- as.factor(credit_approval$Approved) # same like the mutate functions
+```
+
+# Data splits
+
+```{r}
+set.seed(123)
+c(train, val, test) %<-% train_val_test_split(credit_approval, train_ratio =0.8, val_ratio = 0.2, test_ratio = 0.0)
+```
+
+# Model
+
+```{r}
+set.seed(123)
+model_rf <- randomForest(data = train, Approved ~.)
+model_rf
+```
+
+# Predictions
+
+```{r}
+val$Approved_pred <- predict(object=model_rf, newdata = val) # Default way: Predictions are not probabilities but classes 0 and 1.
+```
+
+
+```{r}
+cm_val <- table(predicted=val$Approved_pred, obs = val$Approved)
+cm_val
+```
+
+```{r}
+confusionMatrix(val$Approved_pred, val$Approved) # also works as confusionMatrix(cm_val)
+```
+
+Baseline classifier
+
+```{r}
+tab_appr <- table(val$Approved)
+max(tab_appr)/sum(tab_appr)
+```
+
+
+## Feature Importance
+
+```{r}
+# Which parameters have a high predictive value in the model?
+
+feat_importance <- model_rf %>% 
+  randomForest::importance()
+feat_importance <- tibble(feature = rownames(feat_importance),
+                          importance = feat_importance[, 1])
+# sort the featues
+feat_importance$feature <- feat_importance$feature %>% 
+  fct_reorder(feat_importance$importance)
+```
+
+```{r}
+g <- ggplot(feat_importance, aes(x = feature,
+                                 y = importance))
+g <- g + geom_col()
+g
+```
+
+Prior default has the highest importance of all features.
+
+A simple graph can also be plotted directly with *varImpPlot()* function.
+
+```{r}
+varImpPlot(model_rf)
+```
+
+# Model Parameter Tuning
+
+RandomForests have some hyperparameters that can be 
+
+```{r}
+ntree_range <- seq(10,200, 10)
+ntree_res <- tibble(range = ntree_range,
+                    accuracy = NA)
+for (ntree in ntree_range) {
+  # Create the model with hypertuning parameter
+  model_rf <- randomForest(data = train, Approved ~ ., ntree = ntree)
+
+  # create predictions on validation dataset
+  val$Approved_pred <- predict(model_rf, val)
+
+  # create confusion matrix
+  conf_mat <- table(predicted = val$Approved_pred, actual = val$Approved)
+
+  # derive metrics from confusion matrix
+  acc <- caret::confusionMatrix(conf_mat)$overall[1]
+  ntree_res$accuracy[which(ntree_range == ntree)] <- acc
+}
+
+g <- ggplot(ntree_res, aes(range, accuracy))
+g <- g + geom_line()
+g
+```
+
+```{r}
+mtry_range <- seq(2,10, 1)
+mtry_res <- tibble(range = mtry_range,
+                    accuracy = NA)
+for (mtry in mtry_range) {
+  # Create the model with hypertuning parameter
+  model_rf <- randomForest(data = train, 
+                           Approved ~ ., 
+                           ntree = 100, 
+                           mtry = mtry)
+
+  # create predictions on validation dataset
+  val$Approved_pred <- predict(model_rf, val)
+
+  # create confusion matrix
+  conf_mat <- table(predicted = val$Approved_pred, actual = val$Approved)
+
+  # derive metrics from confusion matrix
+  acc <- caret::confusionMatrix(conf_mat)$overall[1]
+  mtry_res$accuracy[which(mtry_range == mtry)] <- acc
+}
+
+g <- ggplot(mtry_res, aes(range, accuracy))
+g <- g + geom_line()
+g
+
+```
+

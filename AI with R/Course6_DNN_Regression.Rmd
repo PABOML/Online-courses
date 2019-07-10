@@ -1,0 +1,179 @@
+---
+title: "Course6_DNN_MultiTargetRegression"
+author: "Paul"
+date: "13 Dezember 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(keras)
+library(dplyr)
+library(ggplot2)
+source("./train_val_test_split.R")
+```
+
+# Data Understanding
+We'll work on energy efficiency
+
+```{r}
+energy_raw <- readxl::read_xlsx('./data/ENB2012_data.xlsx')
+```
+
+```{r}
+energy_raw %>% summary()
+```
+
+# Data Preparation
+
+##Train/Val/Test split
+
+```{r}
+c(train, val, test) %<-% train_val_test_split(df=energy_raw, train_ratio=0.8, val_ratio=0.0, test_ratio=0.2)
+```
+
+```{r}
+summary(train$Y1)
+summary(test$Y1)
+```
+
+We might use stratified train/test split to align the target variable for training and test dataset. There are currently (above) different statistical bases for the train and test set.
+
+
+```{r}
+x_train <- train %>% 
+  select(- Y1, -Y2) %>%
+  as.matrix()
+
+y_train <- train %>% 
+  select(Y1,Y2) %>%
+  as.matrix()
+
+
+x_test <- test %>% 
+  select(- Y1, -Y2) %>%
+  as.matrix()
+
+y_test <- test %>% 
+  select(Y1,Y2) %>%
+  as.matrix()
+
+dimnames(x_train) <- NULL
+dimnames(x_test) <- NULL
+
+```
+
+
+##Data Scaling
+
+```{r}
+x_train_scale <- x_train %>%
+  scale()
+
+col_mean_train <- attr(x_train_scale, 'scaled:center')
+col_sd_train <- attr(x_train_scale, 'scaled:scale')
+
+x_test_scale <- x_test %>%
+  scale(center=col_mean_train, scale=col_sd_train)
+```
+
+#Modeling
+
+## Initialization of model
+
+```{r}
+dnn_reg_model <- keras_model_sequential()
+```
+
+## Add layers
+
+```{r}
+dnn_reg_model %>%
+  layer_dense(units=50, activation = 'relu', 
+              input_shape = c(ncol(x_train_scale)))%>%
+  layer_dense(units = 10, activation = 'relu') %>%
+  layer_dense(units=2, activation='relu')
+```
+
+```{r}
+dnn_reg_model %>% summary()
+```
+Specify loss function, optimizer and performance metric
+
+```{r}
+dnn_reg_model %>%
+  compile(optimizer=optimizer_adam(),
+          loss='mean_absolute_error')
+```
+
+We put everything into one function (so we don't need to run through all chunks again when we alter something)
+
+```{r}
+create_model <- function() {
+  dnn_reg_model <- keras_model_sequential() %>%
+  dnn_reg_model %>%
+  layer_dense(units=50, activation = 'relu', 
+              input_shape = c(ncol(x_train_scale)))%>%
+  layer_dense(units = 20, activation = 'relu') %>%
+  layer_dense(units=2, activation='relu') %>%
+    compile(optimizer=optimizer_adam(),
+          loss='mean_absolute_error')
+  
+}
+```
+
+## Model Fitting
+
+```{r}
+dnn_reg_model <- create_model()
+history <- dnn_reg_model %>%
+  keras::fit(x=x_train_scale, 
+             y=y_train, 
+             epochs = 200, 
+             validation_split =0.2,
+             verbose=1,
+             batch_size= 128)
+```
+
+```{r}
+plot(history, smooth =F)
+```
+
+## Preditions
+
+```{r}
+y_test_pred <- predict(object=dnn_reg_model, x=x_test_scale)
+y_test_pred %>% head()
+```
+
+```{r}
+test$Y1_pred <- y_test_pred[, 1]
+test$Y2_pred <- y_test_pred[, 2]
+```
+
+Correlation plot for Y1
+
+```{r}
+R2_test <- caret::postResample(pred=test$Y1_pred, obs=test$Y1)
+g <- ggplot(test, aes(Y1, Y1_pred))
+g <- g + geom_point()
+g <- g + geom_smooth(method = 'lm', se =F)
+g <- g + geom_abline(slope=1, intercept=0, col='black')
+g
+```
+
+
+Correlation plot for Y2
+
+```{r}
+R2_test <- caret::postResample(pred=test$Y2_pred, obs=test$Y2)
+g <- ggplot(test, aes(Y2, Y2_pred))
+g <- g + geom_point()
+g <- g + geom_smooth(method = 'lm', se =F)
+g <- g + geom_abline(slope=1, intercept=0, col='black')
+g
+```

@@ -1,0 +1,111 @@
+---
+title: "Course6_DNN_Classification"
+author: "Paul"
+date: "13 Dezember 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(keras)
+library(dplyr)
+library(caret)
+source("./train_val_test_split.R")
+```
+
+#Data Prep
+## Data loading
+
+```{r}
+spam <- read.csv('./data/spam.csv', header=F)
+spam %>% head()
+```
+
+##Train, val, test split
+
+```{r}
+c(train, val, test) %<-% train_val_test_split(df=spam, train_ratio=0.8, val_ratio=0.0, test_ratio=0.2)
+```
+
+
+## Scaling
+
+```{r}
+x_train <- train %>%
+  select(-V58) %>%
+  as.matrix()
+y_train <- train%>% 
+  select(V58) %>%
+  as.matrix() #Keras and tensorflow cannot work with data frames. thus, we need to create a matrix out of the data (matrix = tensor)
+
+x_test <- test %>%
+  select(-V58) %>%
+  as.matrix()
+y_test <- test%>%
+  select(V58) %>%
+  as.matrix()
+
+```
+
+
+
+```{r}
+x_train_scale <- x_train %>%
+  scale()
+
+col_mean_train <- attr(x_train_scale, 'scaled:center')
+col_sd_train <- attr(x_train_scale, 'scaled:scale')
+
+x_test_scale <- x_test %>%
+  scale(center = col_mean_train, scale =col_sd_train)
+```
+
+
+# Model
+
+```{r}
+create_class_model <- function() {
+  dnn_class_model <- keras_model_sequential() %>%
+    layer_dense(units=50, activation= 'relu', input_shape=c(ncol(x_train_scale))) %>%
+    layer_dense(units=100, activation= 'relu') %>%
+    layer_dense(units=1, activation='sigmoid') %>% 
+    keras::compile(optimizer='adam',
+            loss = 'binary_crossentropy',
+            metrics = 'accuracy')
+    # We want to have probabilities, so 'its not wrong' to use a sigmoid function
+}
+```
+
+## Model fitting
+
+```{r}
+dnn_class_model %>%
+  fit(x=x_train_scale,
+      y=y_train,
+      epochs=5,
+      validation_split=0.2,
+      verbose=1,
+      batch_size=128)
+```
+
+```{r}
+table(train$V58)
+2233/(2233+1447)
+```
+#Predictions
+
+
+```{r}
+y_test_pred <- predict(object=dnn_class_model, x=x_test_scale)
+y_test_class <- ifelse(y_test_pred < 0.5, 0, 1)
+```
+
+
+```{r}
+confusionMatrix(factor(y_test_class), factor(test$V58))
+```
+

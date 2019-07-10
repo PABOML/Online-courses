@@ -1,0 +1,312 @@
+---
+title: "Classification"
+author: "Bert Gollnick"
+date: "September 17, 2018"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In course of this script we will need the following packages.
+
+```{r}
+library(tidyverse)
+library(randomForest)
+library(e1071)
+library(pROC)
+```
+
+
+# Data Preparation
+
+Adult data set is provided by “Center for Machine Learning and Intelligent Systems”. It includes 32k datasets with information on age, workclass, education, …, and finally the information on income. Income might be “<=50K” or “>=50K”.
+
+Data is used from [https://archive.ics.uci.edu/ml/datasets/Adult].
+
+We will work on prediction whether income exceeds $50K/yr based on census data. The dataset is also known as "Census Income" dataset.
+
+You find some explanations in my article:
+[http://smartdatawithr.com/en/machine-learning-classification-problem/].
+
+## Data Import
+
+We load the data, adapt column names, remove not needed columns, and finally created a factor mapping for target variable.
+
+```{r}
+df <- read.csv("./data/adult.data")
+column_names <- c("age", "workclass", "fnlwgt", "education", "education-num", "marital_status", "occupation", "relationship", "race", "sex", "capital_gain", "capital_loss", "hours_per_week", "native-country", "income")
+
+colnames(df) <- column_names
+
+df$`education-num` <- NULL
+df$`native-country` <- NULL
+
+df$income <- df$income %>% as.numeric() %>%  -1 %>%  as.factor()
+```
+
+Income is mapped this way: 0...<=50K, 1...>50K.
+
+## Train / Test Split
+
+Data is splitted into train and test dataset.
+
+```{r}
+set.seed(1000)
+adult_train_pos <- sample(x = 1:nrow(df), size = .8 * nrow(df))
+adult_test_pos <- setdiff(1:nrow(df), adult_train_pos)
+adult_train <- df[adult_train_pos, ]
+adult_test <- df[adult_test_pos, ]  
+```
+
+## Data Understanding
+
+Usually you need to put more effort to understand the business, and the data set
+
+## Model Creation
+
+Now we will work on the model creation, and calculation of predictions.
+
+### Logistic Regression
+
+```{r}
+log_reg_fit <- glm(formula = income ~ ., 
+                 family = binomial, 
+                 data = adult_train)
+```
+
+```{r}
+summary(log_reg_fit)
+```
+
+```{r}
+exp(coef(log_reg_fit))
+```
+
+```{r}
+predictions <- predict(object = log_reg_fit, 
+                       newdata = adult_test, 
+                       type = "response")
+
+adult_test$income_pred_logreg_raw <- predictions
+adult_test$income_pred_logreg <- ifelse(predictions >.5, 1, 0)
+```
+
+### Random Forest
+
+```{r}
+rf_fit <- randomForest(income ~ ., data = adult_train, probability = T)
+rf_pred_class <- predict(object = rf_fit, newdata = adult_test, type="class")
+rf_pred <- predict(object = rf_fit, newdata = adult_test, type="prob") 
+rf_pred_1 <- rf_pred[, 2]
+```
+
+### Support Vector Machines
+
+```{r}
+svm_fit <- svm(income ~ ., data = adult_train, probability = T)
+svm_pred <- predict(object = svm_fit, newdata = adult_test, probability = F)
+svm_pred_prob <- predict(object = svm_fit, newdata = adult_test, probability = T) 
+svm_pred_prob_0 <- attr(svm_pred_prob, "probabilities")[, 1]
+svm_pred_prob_1 <- attr(svm_pred_prob, "probabilities")[, 2]
+```
+
+## Model Evaluation
+
+We developed different models, which will now be evaluated.
+
+### Confusion Matrix
+
+The confusion matrix is created in the following way.
+
+```{r}
+table(adult_test$income, adult_test$income_pred_logreg)
+```
+
+Accuracy is calculated to `r mean(adult_test$income == adult_test$income_pred_logreg)`.
+
+### Confusion Matrix
+
+```{r}
+adult_test$group <- NA
+threshold <- 0.6
+
+adult_test$group[adult_test$income_pred_logreg_raw >= threshold & adult_test$income == "1"] <- "TP"
+adult_test$group[adult_test$income_pred_logreg_raw >= threshold & adult_test$income == "0"] <- "FP"
+adult_test$group[adult_test$income_pred_logreg_raw < threshold & adult_test$income == "1"] <- "FN"
+adult_test$group[adult_test$income_pred_logreg_raw < threshold & adult_test$income == "0"] <- "TN"
+
+g <- ggplot(adult_test, aes(x = income,
+                              y = income_pred_logreg_raw, 
+                              col = group))
+g <- g + geom_jitter()
+g <- g + geom_hline(yintercept = threshold)
+g <- g + theme_bw()
+g <- g + scale_color_discrete(name = "Group")
+g <- g + xlab ("Actual")
+g <- g + xlab ("Predicted")
+g <- g + ggtitle ("Impact of Threshold on FN/FP/TN/TP")
+g
+```
+
+### ROC
+
+```{r roc_df_svm}
+total <- nrow(adult_test)
+roc_df_rf <- data_frame(threshold = seq(0.01, 1, 0.001),
+                     fp = NA,
+                     tp = NA,
+                     fn = NA,
+                     tn = NA)
+
+for (thres_pos in 1:nrow(roc_df_rf)) {
+  thres <- roc_df_rf$threshold[thres_pos]
+  roc_df_rf$tp[thres_pos] <- sum(as.numeric(rf_pred_1) >= thres & adult_test$income == 1)
+  roc_df_rf$fp[thres_pos] <- sum(as.numeric(rf_pred_1) >= thres & adult_test$income == 0)
+  roc_df_rf$fn[thres_pos] <- sum(as.numeric(rf_pred_1) < thres & adult_test$income == 1)
+  roc_df_rf$tn[thres_pos] <- sum(as.numeric(rf_pred_1) < thres & adult_test$income == 0)
+}
+
+roc_df_rf$tpr <- roc_df_rf$tp / (roc_df_rf$fn + roc_df_rf$tp)
+roc_df_rf$fpr <- roc_df_rf$fp / (roc_df_rf$tn + roc_df_rf$fp)
+roc_df_rf$method <- "Random Forest"
+```
+
+
+```{r roc_df_svm2}
+total <- nrow(adult_test)
+roc_df_svm <- data_frame(threshold = seq(0.01, 1, 0.001),
+                     fp = NA,
+                     tp = NA,
+                     fn = NA,
+                     tn = NA)
+
+for (thres_pos in 1:nrow(roc_df_svm)) {
+  thres <- roc_df_svm$threshold[thres_pos]
+  roc_df_svm$tp[thres_pos] <- sum(as.numeric(svm_pred_prob_1) >= thres & adult_test$income == 1)
+  roc_df_svm$fp[thres_pos] <- sum(as.numeric(svm_pred_prob_1) >= thres & adult_test$income == 0)
+  roc_df_svm$fn[thres_pos] <- sum(as.numeric(svm_pred_prob_1) < thres & adult_test$income == 1)
+  roc_df_svm$tn[thres_pos] <- sum(as.numeric(svm_pred_prob_1) < thres & adult_test$income == 0)
+}
+
+roc_df_svm$tpr <- roc_df_svm$tp / (roc_df_svm$fn + roc_df_svm$tp)
+roc_df_svm$fpr <- roc_df_svm$fp / (roc_df_svm$tn + roc_df_svm$fp)
+roc_df_svm$method <- "SVM"
+```
+
+
+```{r roc_df_logreg}
+total <- nrow(adult_test)
+roc_df <- data_frame(threshold = seq(0.01, 1, 0.001),
+                     fp = NA,
+                     tp = NA,
+                     fn = NA,
+                     tn = NA)
+
+for (thres_pos in 1:nrow(roc_df)) {
+  thres <- roc_df$threshold[thres_pos]
+  roc_df$tp[thres_pos] <- sum(adult_test$income_pred_logreg_raw >= thres & adult_test$income == 1)
+  roc_df$fp[thres_pos] <- sum(adult_test$income_pred_logreg_raw >= thres & adult_test$income == 0)
+  roc_df$fn[thres_pos] <- sum(adult_test$income_pred_logreg_raw < thres & adult_test$income == 1)
+  roc_df$tn[thres_pos] <- sum(adult_test$income_pred_logreg_raw < thres & adult_test$income == 0)
+}
+
+roc_df$tpr <- roc_df$tp / (roc_df$fn + roc_df$tp)
+roc_df$fpr <- roc_df$fp / (roc_df$tn + roc_df$fp)
+roc_df_logreg <- roc_df
+roc_df_logreg$method <- "LogReg"
+```
+
+
+```{r}
+roc_df <- roc_df_logreg %>% 
+  rbind(., roc_df_svm) %>% 
+  rbind(., roc_df_rf)
+
+g <- ggplot(roc_df, aes(x = fpr, y = tpr, col = method))
+g <- g + geom_line()
+g <- g + geom_abline(intercept = 0)
+g <- g + coord_cartesian(xlim = c(0, 1), ylim = c(0, 1))
+g <- g + theme_bw()
+g <- g + scale_color_discrete(name = "Method")
+g <- g + xlab ("FPR [-]")
+g <- g + ylab ("TPR [-]")
+g <- g + ggtitle("ROC Curve")
+g
+```
+
+### AUC
+
+```{r}
+temp <- roc_df_logreg %>% 
+  dplyr::select(tpr, fpr)
+pROC::auc(as.numeric(adult_test$income), as.numeric(svm_pred))
+pROC::auc(as.numeric(adult_test$income), as.numeric(rf_pred_class))
+pROC::auc(as.numeric(adult_test$income), as.numeric(adult_test$income_pred_logreg))
+```
+
+### Cost Function
+
+Sometimes you FN and FP are not equally critical. In certain cases FP might be much more costly than FN.
+
+We write a function to calculate cost values.
+
+```{r}
+cost <- function(predictions, actual, threshold, cost_of_fp, cost_of_fn) {
+    sum(predictions >= threshold & actual == 0) * cost_of_fp + 
+    sum(predictions < threshold & actual == 1) * cost_of_fn
+}
+```
+
+```{r roc_df_logreg2}
+total <- nrow(adult_test)
+roc_df <- data_frame(threshold = seq(0.01, 1, 0.001),
+                     fp = NA,
+                     tp = NA,
+                     fn = NA,
+                     tn = NA,
+                     cost = NA)
+
+for (thres_pos in 1:nrow(roc_df)) {
+  thres <- roc_df$threshold[thres_pos]
+  roc_df$tp[thres_pos] <- sum(adult_test$income_pred_logreg_raw >= thres & adult_test$income == 1)
+  roc_df$fp[thres_pos] <- sum(adult_test$income_pred_logreg_raw >= thres & adult_test$income == 0)
+  roc_df$fn[thres_pos] <- sum(adult_test$income_pred_logreg_raw < thres & adult_test$income == 1)
+  roc_df$tn[thres_pos] <- sum(adult_test$income_pred_logreg_raw < thres & adult_test$income == 0)
+  roc_df$cost[thres_pos] <- cost(predictions = adult_test$income_pred_logreg_raw, 
+                                 threshold = thres, 
+                                 actual = adult_test$income, 
+                                 cost_of_fp = 10, 
+                                 cost_of_fn = 1)
+}
+
+roc_df$tpr <- roc_df$tp / (roc_df$fn + roc_df$tp)
+roc_df$fpr <- roc_df$fp / (roc_df$tn + roc_df$fp)
+roc_df_logreg <- roc_df
+roc_df_logreg$method <- "LogReg"
+```
+
+
+The graph shows ROC-curve.
+
+```{r}
+g <- ggplot(roc_df, aes(x = fpr, y = tpr, col = cost))
+g <- g + geom_line(size = 2)
+g <- g + geom_point(data = roc_df[which(min(roc_df$cost) == roc_df$cost), ] %>% head(1), col = "black", size = 2)
+g <- g + geom_abline(intercept = 0)
+g <- g + coord_cartesian(xlim = c(0, 1), ylim = c(0, 1))
+g <- g + theme_bw()
+g <- g + scale_color_gradientn(colours = rev(rainbow(5)), name = "Cost Value [-]")
+g <- g + xlab ("FPR [-]")
+g <- g + ylab ("TPR [-]")
+g <- g + ggtitle("ROC Curve")
+g
+```
+
+

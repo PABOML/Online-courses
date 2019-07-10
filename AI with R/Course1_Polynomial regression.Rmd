@@ -1,0 +1,72 @@
+---
+title: "Polynomial regression"
+author: "Paul"
+date: "26 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(caret)
+```
+
+
+# Data Creation
+
+```{r}
+sample_data <- tibble(x= seq(-20, 40, .1),
+                      y= 50 + 0.25 * (x-5)**3,
+                      y_noise= y+ rnorm(n=length(y),
+                                        mean =100,
+                                        sd=500))
+```
+
+
+```{r}
+g<- ggplot(sample_data, aes(x, y_noise))
+g<- g + geom_point()
+g
+```
+
+
+# Modeling
+
+```{r}
+model <- lm(data=sample_data, 
+            formula=y_noise ~ poly(x,3))
+summary(model)
+```
+
+# Predictions
+
+```{r}
+predictions <- tibble(x=seq(-20, 40, .1))
+predictions$pred <- predict(object=model, 
+                            newdata = predictions,
+                            interval='confidence',
+                            level=.99)[, 1]
+```
+
+
+```{r}
+g <- ggplot(predictions, aes(x, pred))
+g<- g+ geom_line(col='green')
+g <- g + geom_line(data=sample_data,
+                   aes(x, y, col ='red'))
+g
+```
+
+```{r}
+model_summary <- summary(model)
+model_summary$adj.r.squared
+```
+
+```{r}
+R2(pred=predictions$pred, obs = sample_data$y_noise)
+```
+

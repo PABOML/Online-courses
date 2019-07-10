@@ -1,0 +1,151 @@
+---
+title: "Multivariate_regression"
+author: "Paul"
+date: "26 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(caret)
+#install.packages('tidyr')
+#install.packages('corrplot')
+library(tidyr)
+library(corrplot)
+#install.packages('keras')
+library(keras)
+```
+
+# Data import
+
+```{r}
+df<- read.csv('data/winequality-red.csv',
+              sep = ';')
+summary(df)
+```
+
+## Independent vs. dependent variable
+
+```{r}
+df_scaled <- df %>%
+  scale()%>%
+  as_tibble()
+  
+```
+
+
+```{r}
+cor_vals <- cor(df_scaled)
+corrplot.mixed(corr=cor_vals)
+```
+
+
+```{r}
+df_gather <- df_scaled %>%
+  gather(key='variable', value='value', 1:11) %>%
+  mutate (variable = as.factor(variable))
+```
+
+# Train, Dev, Test Split
+
+```{r}
+train_ratio <-0.8
+dev_ratio <- 0.1
+test_ratio <- 1- dev_ratio - train_ratio
+```
+
+
+```{r}
+set.seed(123)
+n_obs <- nrow(df)
+train_sample <- floor(n_obs*train_ratio)
+dev_sample <- floor(n_obs*dev_ratio)
+test_sample <- floor(n_obs*test_ratio)
+
+indices_train <- sort(base::sample(x=1:n_obs,size=train_sample))
+
+indices_not_train <- setdiff(1:n_obs, indices_train)
+
+indices_dev <- sort(base::sample(indices_not_train, size=dev_sample))
+indices_test<- setdiff(indices_not_train, indices_dev)
+
+train<- df[indices_train, ]
+dev<- df[indices_dev,]
+test<- df[indices_test,]
+
+```
+
+
+```{r}
+source('./train_val_test_split.R')
+```
+
+
+
+```{r}
+g <- ggplot(df_gather, aes(quality, value))
+g <- g + facet_wrap (~variable)
+g <- g + geom_point()
+g <- g + geom_smooth(method = 'lm', se = F)
+g
+```
+
+# Correlation plot
+
+```{r}
+corrplot.mixed(cor(df))
+```
+
+# MOdeling
+
+```{r}
+model <- lm(data=train,
+            formula=quality ~ volatile.acidity + sulphates + alcohol)
+```
+
+# Predictions
+
+```{r}
+dev$quality_prediction <- predict(object = model, 
+                                  newdata = dev)
+```
+
+
+```{r}
+R2(pred=dev$quality_prediction,
+   obs=dev$quality)
+```
+
+```{r}
+postResample(pred=dev$quality_prediction,
+   obs=dev$quality)
+```
+
+
+
+# Course2: COntinuation
+
+```{r}
+c(train, val, test) %<-% train_val_test_split(df=df_scaled,
+                                              train_ratio=0.8,
+                                              val_ratio=0.1,
+                                              test_ratio=0.1)
+```
+
+Create Correlation Plot predicted vs. actual values
+
+```{r}
+g <- ggplot(dev, aes(x=quality, y=quality_prediction))
+g <- g + geom_point()
+g <- g + geom_smooth(method='lm', se=F)
+g <- g + geom_abline(slope=1, intercept=0) # The "perfect" line
+g
+```
+
